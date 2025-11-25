@@ -31,6 +31,8 @@ Each agent's output becomes the input for the next agent, creating a sequential 
 
 ## ✨ Features
 
+- **PDF Upload Support**: Upload research papers directly as PDF files (automatic text extraction)
+- **Flexible Input**: Choose between PDF upload or direct text paste
 - **Real-time Progress Tracking**: Watch each agent process your paper with live status updates
 - **Interactive UI**: Modern, clean interface with smooth animations
 - **Section Summaries**: Expandable cards showing AI-generated summaries
@@ -44,6 +46,7 @@ Each agent's output becomes the input for the next agent, creating a sequential 
 ### Backend
 - **FastAPI** - Modern Python web framework
 - **Ollama** - Local LLM inference (Llama 3.1 8B)
+- **PyPDF2** - PDF text extraction
 - **Pydantic** - Data validation
 - **Uvicorn** - ASGI server
 
@@ -146,20 +149,26 @@ The application will automatically open in your browser.
 
 ## 📖 Usage
 
-1. **Paste Research Paper Text**
-   - Click "Load Sample Paper" to try with demo content
-   - Or paste your own research paper text (minimum 100 characters)
+1. **Choose Input Method**
+   - **Upload PDF** (Recommended): Click "📄 Upload PDF" and select your research paper PDF file
+   - **Paste Text**: Click "📝 Paste Text" and paste paper content directly
+   - Or use "Load Sample Paper" to try with demo content
 
-2. **Generate Study Guide**
+2. **Upload Your Research Paper**
+   - Select a PDF file from your computer
+   - The app will automatically extract text from the PDF
+   - Supported format: PDF files only
+
+3. **Generate Study Guide**
    - Click the "🚀 Generate Study Guide" button
    - Watch the 4-agent workflow progress in real-time
 
-3. **Explore Results**
+4. **Explore Results**
    - **Summaries Tab**: View section-by-section summaries
    - **Quiz Tab**: Take an interactive quiz to test understanding
    - **Study Guide Tab**: Access the complete study guide with tips
 
-4. **Track Progress**
+5. **Track Progress**
    - Real-time progress indicators show which agent is active
    - Progress bar updates as each agent completes (25% → 50% → 75% → 100%)
 
@@ -201,8 +210,17 @@ ResearchPaperAgent/
 
 ## 🔧 API Endpoints
 
+### `POST /api/process-paper-pdf`
+Process research paper PDF through 4-agent workflow with SSE streaming.
+
+**Request:** Multipart form data with PDF file
+- Field name: `file`
+- Content-Type: `multipart/form-data`
+
+**Response:** Server-Sent Events stream with progress updates
+
 ### `POST /api/process-paper`
-Process research paper through 4-agent workflow with SSE streaming.
+Process research paper text through 4-agent workflow with SSE streaming.
 
 **Request:**
 ```json
@@ -213,7 +231,7 @@ Process research paper through 4-agent workflow with SSE streaming.
 
 **Response:** Server-Sent Events stream with progress updates
 
-**Event Format:**
+**Event Format (both endpoints):**
 ```json
 {
   "agent": 1,
@@ -248,6 +266,37 @@ response = ollama.chat(
 
 ## 🐛 Troubleshooting
 
+### "Agent 1 failed: Expecting value" or JSON parsing errors
+This usually means the LLM returned malformed JSON. Solutions:
+
+1. **Test your setup first:**
+```bash
+cd backend
+python test_agent.py
+```
+This will show you the raw LLM output and help identify the issue.
+
+2. **Try with smaller papers first** - Start with 5-10 page papers
+3. **Use text mode** instead of PDF if extraction is problematic
+4. **Restart Ollama** if it's been running a long time:
+```bash
+# Stop Ollama
+ollama stop
+
+# Restart it
+ollama serve
+```
+
+5. **Check Ollama health:**
+```bash
+curl http://localhost:8000/api/health
+```
+
+### PDF extraction issues with large papers
+- The app limits processing to first 50 pages for large PDFs
+- For very large papers (>30 pages), consider extracting specific sections manually
+- Alternative: Use the "Paste Text" mode with just the relevant sections
+
 ### "Connection Error" when processing paper
 - Ensure Ollama is running: `ollama serve`
 - Verify model is installed: `ollama list`
@@ -264,9 +313,10 @@ response = ollama.chat(
 - Ensure both servers are running
 
 ### Slow processing
-- First run may be slower as model loads
+- First run may be slower as model loads (can take 2-3 minutes for first request)
 - Consider using a smaller model for faster demos
 - Processing time varies with paper length
+- 35-page PDF may take 3-5 minutes to process
 
 ## 📝 Notes
 

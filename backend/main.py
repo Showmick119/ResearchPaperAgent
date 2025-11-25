@@ -3,13 +3,16 @@ FastAPI Backend for Research Paper Study Assistant
 Implements 4-agent sequential workflow with real-time progress updates via SSE
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
 import asyncio
 from typing import AsyncGenerator
+import PyPDF2
+import io
+import ollama
 
 from agents import (
     Agent1_SectionExtractor,
@@ -31,8 +34,33 @@ app.add_middleware(
 
 
 class PaperRequest(BaseModel):
-    """Request model for paper processing"""
+    """Request model for paper processing (text input)"""
     paper_text: str
+
+
+def extract_text_from_pdf(pdf_file: bytes) -> str:
+    """
+    Extract text content from PDF file.
+    For large PDFs, extracts first 50 pages to avoid overwhelming the LLM.
+    """
+    try:
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_file))
+        text = ""
+        
+        # Limit to first 50 pages for very large documents
+        max_pages = min(50, len(pdf_reader.pages))
+        
+        for i in range(max_pages):
+            page_text = pdf_reader.pages[i].extract_text()
+            if page_text:
+                text += page_text + "\n\n"
+        
+        if len(pdf_reader.pages) > 50:
+            text += f"\n\n[Note: PDF has {len(pdf_reader.pages)} pages. Extracted first 50 pages for analysis.]"
+        
+        return text.strip()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error extracting PDF text: {str(e)}")
 
 
 async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
@@ -54,7 +82,8 @@ async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
         )
         
         if not agent1_result.get('success'):
-            yield f"data: {json.dumps({'agent': 1, 'status': 'error', 'message': f'Agent 1 failed: {agent1_result.get(\"error\")}' })}\n\n"
+            error_msg = f"Agent 1 failed: {agent1_result.get('error')}"
+            yield f"data: {json.dumps({'agent': 1, 'status': 'error', 'message': error_msg})}\n\n"
             return
         
         sections = agent1_result['sections']
@@ -72,7 +101,8 @@ async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
         )
         
         if not agent2_result.get('success'):
-            yield f"data: {json.dumps({'agent': 2, 'status': 'error', 'message': f'Agent 2 failed: {agent2_result.get(\"error\")}' })}\n\n"
+            error_msg = f"Agent 2 failed: {agent2_result.get('error')}"
+            yield f"data: {json.dumps({'agent': 2, 'status': 'error', 'message': error_msg})}\n\n"
             return
         
         summaries = agent2_result['summaries']
@@ -90,7 +120,8 @@ async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
         )
         
         if not agent3_result.get('success'):
-            yield f"data: {json.dumps({'agent': 3, 'status': 'error', 'message': f'Agent 3 failed: {agent3_result.get(\"error\")}' })}\n\n"
+            error_msg = f"Agent 3 failed: {agent3_result.get('error')}"
+            yield f"data: {json.dumps({'agent': 3, 'status': 'error', 'message': error_msg})}\n\n"
             return
         
         quiz = agent3_result['quiz']
@@ -109,7 +140,8 @@ async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
         )
         
         if not agent4_result.get('success'):
-            yield f"data: {json.dumps({'agent': 4, 'status': 'error', 'message': f'Agent 4 failed: {agent4_result.get(\"error\")}' })}\n\n"
+            error_msg = f"Agent 4 failed: {agent4_result.get('error')}"
+            yield f"data: {json.dumps({'agent': 4, 'status': 'error', 'message': error_msg})}\n\n"
             return
         
         study_guide = agent4_result['study_guide']
@@ -135,10 +167,8 @@ async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
 @app.post("/api/process-paper")
 async def process_paper(request: PaperRequest):
     """
-    Main endpoint for processing research papers.
+    Process research paper from text input.
     Returns Server-Sent Events stream for real-time progress updates.
-    
-    Frontend connects to this endpoint and receives progress as each agent completes.
     """
     
     if not request.paper_text or len(request.paper_text.strip()) < 100:
@@ -153,17 +183,101 @@ async def process_paper(request: PaperRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable buffering for nginx
+            "X-Accel-Buffering": "no"
         }
     )
+
+
+@app.post("/api/process-paper-pdf")
+async def process_paper_pdf(file: UploadFile = File(...)):
+    """
+    Process research paper from PDF upload.
+    Returns Server-Sent Events stream for real-time progress updates.
+    
+    Accepts PDF file, extracts text, and processes through 4-agent workflow.
+    """
+    
+    # Validate file type
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Please upload a PDF file."
+        )
+    
+    # Read PDF file
+    try:
+        pdf_content = await file.read()
+        
+        if len(pdf_content) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Uploaded file is empty."
+            )
+        
+        # Extract text from PDF
+        paper_text = extract_text_from_pdf(pdf_content)
+        
+        if len(paper_text.strip()) < 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Extracted text is too short. Please provide a complete research paper PDF."
+            )
+        
+        return StreamingResponse(
+            process_paper_stream(paper_text),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing PDF: {str(e)}"
+        )
+
+
+@app.post("/api/test-pdf-extract")
+async def test_pdf_extract(file: UploadFile = File(...)):
+    """
+    Test endpoint to check PDF text extraction.
+    Returns first 1000 characters of extracted text.
+    """
+    try:
+        pdf_content = await file.read()
+        extracted_text = extract_text_from_pdf(pdf_content)
+        
+        return {
+            "success": True,
+            "text_length": len(extracted_text),
+            "preview": extracted_text[:1000] + "..." if len(extracted_text) > 1000 else extracted_text
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
+    try:
+        # Test Ollama connection
+        response = ollama.chat(
+            model='llama3.1:8b',
+            messages=[{'role': 'user', 'content': 'Hello'}]
+        )
+        ollama_status = "connected"
+    except Exception as e:
+        ollama_status = f"error: {str(e)}"
+    
     return {
         "status": "healthy",
         "message": "Research Paper Study Assistant API is running",
+        "ollama_status": ollama_status,
         "agents": [
             "Agent 1: Section Extractor",
             "Agent 2: Summarizer", 
@@ -181,7 +295,8 @@ async def root():
         "version": "1.0.0",
         "description": "4-agent sequential workflow for processing research papers",
         "endpoints": {
-            "POST /api/process-paper": "Process research paper through agent workflow",
+            "POST /api/process-paper": "Process research paper from text input",
+            "POST /api/process-paper-pdf": "Process research paper from PDF upload",
             "GET /api/health": "Health check endpoint",
             "GET /": "This information page"
         }

@@ -6,6 +6,8 @@ import StudyGuideDisplay from './components/StudyGuideDisplay';
 
 function App() {
   const [paperText, setPaperText] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadMode, setUploadMode] = useState('pdf'); // 'pdf' or 'text'
   const [isProcessing, setIsProcessing] = useState(false);
   const [agentProgress, setAgentProgress] = useState([
     { id: 1, name: 'Section Extractor', status: 'pending', message: '' },
@@ -17,17 +19,36 @@ function App() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.name.endsWith('.pdf')) {
+        setError('Please select a PDF file');
+        return;
+      }
+      setSelectedFile(file);
+      setError(null);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!paperText.trim()) {
-      setError('Please paste research paper text');
-      return;
-    }
-
-    if (paperText.length < 100) {
-      setError('Paper text is too short. Please provide a complete research paper.');
-      return;
+    // Validate input based on mode
+    if (uploadMode === 'pdf') {
+      if (!selectedFile) {
+        setError('Please select a PDF file to upload');
+        return;
+      }
+    } else {
+      if (!paperText.trim()) {
+        setError('Please paste research paper text');
+        return;
+      }
+      if (paperText.length < 100) {
+        setError('Paper text is too short. Please provide a complete research paper.');
+        return;
+      }
     }
 
     // Reset state
@@ -42,14 +63,27 @@ function App() {
     ]);
 
     try {
-      // Connect to Server-Sent Events stream
-      const response = await fetch('http://localhost:8000/api/process-paper', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ paper_text: paperText })
-      });
+      let response;
+      
+      if (uploadMode === 'pdf') {
+        // Upload PDF file
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        
+        response = await fetch('http://localhost:8000/api/process-paper-pdf', {
+          method: 'POST',
+          body: formData
+        });
+      } else {
+        // Send text
+        response = await fetch('http://localhost:8000/api/process-paper', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ paper_text: paperText })
+        });
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -156,32 +190,136 @@ This study provides strong evidence for integrating deep learning into clinical 
         {/* Input Section */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label htmlFor="paper-text" className="block text-lg font-semibold text-gray-900 mb-2">
-                📄 Paste Research Paper Text
-              </label>
-              <textarea
-                id="paper-text"
-                value={paperText}
-                onChange={(e) => setPaperText(e.target.value)}
-                placeholder="Paste your research paper text here (minimum 100 characters)..."
-                className="w-full h-64 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm font-mono"
+            {/* Toggle between PDF and Text Input */}
+            <div className="mb-6 flex space-x-4 border-b border-gray-200 pb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadMode('pdf');
+                  setError(null);
+                }}
                 disabled={isProcessing}
-              />
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-gray-500">
-                  Characters: {paperText.length}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setPaperText(sampleText)}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                  disabled={isProcessing}
-                >
-                  Load Sample Paper
-                </button>
-              </div>
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                  uploadMode === 'pdf'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📄 Upload PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadMode('text');
+                  setError(null);
+                }}
+                disabled={isProcessing}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                  uploadMode === 'text'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📝 Paste Text
+              </button>
             </div>
+
+            {/* PDF Upload Mode */}
+            {uploadMode === 'pdf' && (
+              <div className="mb-4">
+                <label htmlFor="pdf-upload" className="block text-lg font-semibold text-gray-900 mb-2">
+                  📄 Upload Research Paper (PDF)
+                </label>
+                <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-blue-400 transition-colors duration-200">
+                  <div className="space-y-2 text-center">
+                    <svg
+                      className="mx-auto h-12 w-12 text-gray-400"
+                      stroke="currentColor"
+                      fill="none"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <div className="flex text-sm text-gray-600">
+                      <label
+                        htmlFor="pdf-upload"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                      >
+                        <span>Upload a PDF file</span>
+                        <input
+                          id="pdf-upload"
+                          name="pdf-upload"
+                          type="file"
+                          accept=".pdf"
+                          onChange={handleFileChange}
+                          disabled={isProcessing}
+                          className="sr-only"
+                        />
+                      </label>
+                      <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-xs text-gray-500">PDF files only</p>
+                  </div>
+                </div>
+                {selectedFile && (
+                  <div className="mt-3 flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-sm font-medium text-blue-900">{selectedFile.name}</span>
+                      <span className="text-xs text-blue-600">({(selectedFile.size / 1024).toFixed(2)} KB)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFile(null)}
+                      disabled={isProcessing}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Text Input Mode */}
+            {uploadMode === 'text' && (
+              <div className="mb-4">
+                <label htmlFor="paper-text" className="block text-lg font-semibold text-gray-900 mb-2">
+                  📝 Paste Research Paper Text
+                </label>
+                <textarea
+                  id="paper-text"
+                  value={paperText}
+                  onChange={(e) => setPaperText(e.target.value)}
+                  placeholder="Paste your research paper text here (minimum 100 characters)..."
+                  className="w-full h-64 px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm font-mono"
+                  disabled={isProcessing}
+                />
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-gray-500">
+                    Characters: {paperText.length}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPaperText(sampleText)}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    disabled={isProcessing}
+                  >
+                    Load Sample Paper
+                  </button>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded">
@@ -200,9 +338,9 @@ This study provides strong evidence for integrating deep learning into clinical 
 
             <button
               type="submit"
-              disabled={isProcessing || !paperText.trim()}
+              disabled={isProcessing || (uploadMode === 'pdf' ? !selectedFile : !paperText.trim())}
               className={`w-full py-4 px-6 rounded-lg font-semibold text-white text-lg transition-all duration-200 ${
-                isProcessing || !paperText.trim()
+                isProcessing || (uploadMode === 'pdf' ? !selectedFile : !paperText.trim())
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
               }`}
