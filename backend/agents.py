@@ -30,37 +30,51 @@ Your task is to parse the provided research paper text and identify the followin
 - Discussion
 - Conclusion
 
-Extract the text content for each section you find. If a section is not present, mark it as "Not Found".
+Extract ONLY the first 500 characters of each section. If a section is not present, write "Not Found".
 
-Return your response as a valid JSON object with this exact structure:
+YOU MUST return ONLY a valid JSON object with this EXACT structure (no additional text):
 {
-  "Abstract": "extracted text or Not Found",
-  "Introduction": "extracted text or Not Found",
-  "Methods": "extracted text or Not Found",
-  "Results": "extracted text or Not Found",
-  "Discussion": "extracted text or Not Found",
-  "Conclusion": "extracted text or Not Found"
+  "Abstract": "text here or Not Found",
+  "Introduction": "text here or Not Found",
+  "Methods": "text here or Not Found",
+  "Results": "text here or Not Found",
+  "Discussion": "text here or Not Found",
+  "Conclusion": "text here or Not Found"
 }
 
-IMPORTANT: Return ONLY the JSON object, no additional text or markdown formatting."""
+CRITICAL RULES:
+1. Return ONLY the JSON object
+2. No explanations before or after
+3. No markdown code fences
+4. Must be valid parseable JSON"""
 
         try:
             response = ollama.chat(
                 model='llama3.1:8b',
                 messages=[
                     {'role': 'system', 'content': system_prompt},
-                    {'role': 'user', 'content': f"Extract sections from this research paper:\n\n{paper_text}"}
+                    {'role': 'user', 'content': f"Extract sections from this research paper:\n\n{paper_text[:15000]}"}  # Limit to first 15k chars
                 ]
             )
             
             result_text = response['message']['content'].strip()
             
             # Clean up markdown code blocks if present
-            if result_text.startswith('```'):
+            if '```json' in result_text:
+                start = result_text.find('```json') + 7
+                end = result_text.rfind('```')
+                result_text = result_text[start:end].strip()
+            elif result_text.startswith('```'):
                 lines = result_text.split('\n')
                 result_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else result_text
             
             result_text = result_text.replace('```json', '').replace('```', '').strip()
+            
+            # Remove any text before first { or after last }
+            if '{' in result_text and '}' in result_text:
+                start_idx = result_text.find('{')
+                end_idx = result_text.rfind('}') + 1
+                result_text = result_text[start_idx:end_idx]
             
             sections = json.loads(result_text)
             return {
@@ -69,10 +83,16 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
                 "agent": "Agent 1: Section Extractor"
             }
             
+        except json.JSONDecodeError as e:
+            return {
+                "success": False,
+                "error": f"JSON parsing error: {str(e)}. LLM may have returned invalid JSON. Try a shorter paper or use text mode.",
+                "agent": "Agent 1: Section Extractor"
+            }
         except Exception as e:
             return {
                 "success": False,
-                "error": str(e),
+                "error": f"Error: {str(e)}",
                 "agent": "Agent 1: Section Extractor"
             }
 
@@ -124,11 +144,21 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
             result_text = response['message']['content'].strip()
             
             # Clean up markdown code blocks if present
-            if result_text.startswith('```'):
+            if '```json' in result_text:
+                start = result_text.find('```json') + 7
+                end = result_text.rfind('```')
+                result_text = result_text[start:end].strip()
+            elif result_text.startswith('```'):
                 lines = result_text.split('\n')
                 result_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else result_text
             
             result_text = result_text.replace('```json', '').replace('```', '').strip()
+            
+            # Remove any text before first { or after last }
+            if '{' in result_text and '}' in result_text:
+                start_idx = result_text.find('{')
+                end_idx = result_text.rfind('}') + 1
+                result_text = result_text[start_idx:end_idx]
             
             summaries = json.loads(result_text)
             return {
@@ -137,6 +167,12 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
                 "agent": "Agent 2: Summarizer"
             }
             
+        except json.JSONDecodeError as e:
+            return {
+                "success": False,
+                "error": f"JSON parsing error: {str(e)}. LLM returned invalid JSON.",
+                "agent": "Agent 2: Summarizer"
+            }
         except Exception as e:
             return {
                 "success": False,
@@ -200,11 +236,21 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
             result_text = response['message']['content'].strip()
             
             # Clean up markdown code blocks if present
-            if result_text.startswith('```'):
+            if '```json' in result_text:
+                start = result_text.find('```json') + 7
+                end = result_text.rfind('```')
+                result_text = result_text[start:end].strip()
+            elif result_text.startswith('```'):
                 lines = result_text.split('\n')
                 result_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else result_text
             
             result_text = result_text.replace('```json', '').replace('```', '').strip()
+            
+            # Remove any text before first { or after last }
+            if '{' in result_text and '}' in result_text:
+                start_idx = result_text.find('{')
+                end_idx = result_text.rfind('}') + 1
+                result_text = result_text[start_idx:end_idx]
             
             quiz_data = json.loads(result_text)
             return {
@@ -213,6 +259,12 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
                 "agent": "Agent 3: Quiz Generator"
             }
             
+        except json.JSONDecodeError as e:
+            return {
+                "success": False,
+                "error": f"JSON parsing error: {str(e)}. LLM returned invalid JSON.",
+                "agent": "Agent 3: Quiz Generator"
+            }
         except Exception as e:
             return {
                 "success": False,
@@ -278,11 +330,21 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
             result_text = response['message']['content'].strip()
             
             # Clean up markdown code blocks if present
-            if result_text.startswith('```'):
+            if '```json' in result_text:
+                start = result_text.find('```json') + 7
+                end = result_text.rfind('```')
+                result_text = result_text[start:end].strip()
+            elif result_text.startswith('```'):
                 lines = result_text.split('\n')
                 result_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else result_text
             
             result_text = result_text.replace('```json', '').replace('```', '').strip()
+            
+            # Remove any text before first { or after last }
+            if '{' in result_text and '}' in result_text:
+                start_idx = result_text.find('{')
+                end_idx = result_text.rfind('}') + 1
+                result_text = result_text[start_idx:end_idx]
             
             guide_data = json.loads(result_text)
             
@@ -299,6 +361,12 @@ IMPORTANT: Return ONLY the JSON object, no additional text or markdown formattin
             
             return final_guide
             
+        except json.JSONDecodeError as e:
+            return {
+                "success": False,
+                "error": f"JSON parsing error: {str(e)}. LLM returned invalid JSON.",
+                "agent": "Agent 4: Study Guide Builder"
+            }
         except Exception as e:
             return {
                 "success": False,
