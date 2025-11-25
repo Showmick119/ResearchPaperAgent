@@ -33,13 +33,29 @@ Each agent's output becomes the input for the next agent, creating a sequential 
 
 - **PDF Upload Support**: Upload research papers directly as PDF files (automatic text extraction)
 - **Flexible Input**: Choose between PDF upload or direct text paste
+- **Comprehensive Summaries**: Detailed summaries including statistics, methodology, and key findings
+- **Challenging Quizzes**: 8-12 questions testing deep understanding with specific details
 - **Real-time Progress Tracking**: Watch each agent process your paper with live status updates
 - **Interactive UI**: Modern, clean interface with smooth animations
-- **Section Summaries**: Expandable cards showing AI-generated summaries
-- **Interactive Quiz**: Multiple choice questions with instant feedback and scoring
-- **Study Guide**: Comprehensive guide with tips, takeaways, and all generated content
+- **Study Guide**: Complete guide with detailed tips, key takeaways, and organized content
 - **Server-Sent Events (SSE)**: Real-time streaming of agent progress
 - **Local Processing**: All AI processing happens locally using Ollama
+
+## ⚠️ Important Notes on PDF Extraction
+
+**PDF text extraction has limitations:**
+- ✅ Works well with digital PDFs (Word, LaTeX)
+- ❌ Cannot extract diagrams, figures, graphs, or images
+- ❌ May struggle with complex equations (LaTeX formulas)
+- ❌ Tables with complex formatting may be garbled
+- ❌ Scanned/image-based PDFs will not work
+
+**For best results with figure/diagram-heavy papers:**
+1. Use "📝 Paste Text" mode
+2. Copy text from PDF and add descriptions of key figures
+3. Example: "Figure 2 shows accuracy improving from 79% (baseline) to 94% (CNN)"
+
+See [PDF_LIMITATIONS.md](PDF_LIMITATIONS.md) for detailed information.
 
 ## 🛠️ Tech Stack
 

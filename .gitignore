@@ -24,3 +24,12 @@ Thumbs.db
 .env
 .env.local
 
+# Sample Paper
+/paper
+
+# For Agent
+DEMO_GUIDE.md
+DEMO_README.md
+IMPROVEMENTS_V2.md
+PDF_LIMITATIONS.md
+TROUBLESHOOTING.md

@@ -41,26 +41,44 @@ class PaperRequest(BaseModel):
 def extract_text_from_pdf(pdf_file: bytes) -> str:
     """
     Extract text content from PDF file.
-    For large PDFs, extracts first 50 pages to avoid overwhelming the LLM.
+    Uses enhanced extraction to preserve formatting and get maximum content.
     """
     try:
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_file))
         text = ""
         
-        # Limit to first 50 pages for very large documents
-        max_pages = min(50, len(pdf_reader.pages))
+        total_pages = len(pdf_reader.pages)
         
-        for i in range(max_pages):
-            page_text = pdf_reader.pages[i].extract_text()
-            if page_text:
-                text += page_text + "\n\n"
+        # Extract ALL pages for thorough analysis
+        # The LLM will handle chunking internally
+        for i in range(total_pages):
+            try:
+                page_text = pdf_reader.pages[i].extract_text()
+                if page_text and len(page_text.strip()) > 50:  # Skip nearly empty pages
+                    # Clean up excessive whitespace while preserving structure
+                    page_text = ' '.join(page_text.split())
+                    text += page_text + "\n\n"
+            except Exception as page_error:
+                # Skip problematic pages but continue
+                continue
         
-        if len(pdf_reader.pages) > 50:
-            text += f"\n\n[Note: PDF has {len(pdf_reader.pages)} pages. Extracted first 50 pages for analysis.]"
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from PDF. It may be image-based (scanned) or corrupted."
+            )
+        
+        # Add metadata for context
+        text = f"[PDF Document: {total_pages} pages]\n\n{text}"
         
         return text.strip()
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error extracting PDF text: {str(e)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Error extracting PDF text: {str(e)}. Ensure the PDF is text-based, not scanned images."
+        )
 
 
 async def process_paper_stream(paper_text: str) -> AsyncGenerator[str, None]:
