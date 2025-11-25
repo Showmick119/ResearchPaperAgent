@@ -19,7 +19,6 @@ function SummaryDisplay({ summaries }) {
     'Introduction': '🚀',
     'Methods': '🔬',
     'Results': '📊',
-    'Discussion': '💬',
     'Conclusion': '🎯'
   };
 
@@ -28,7 +27,7 @@ function SummaryDisplay({ summaries }) {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Section Summaries</h2>
         <p className="text-sm text-gray-600">
-          AI-generated concise summaries for each section of the research paper
+          AI-generated comprehensive summaries with key findings, statistics, and details from each section
         </p>
       </div>
 
